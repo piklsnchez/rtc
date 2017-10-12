@@ -102,25 +102,27 @@ class Connection{
     connectPeers() {
         this.controller.log("ENTER connectPeers");
         
-        let config = {'iceServers':[{'urls':'stun:stun.l.google.com:19302'}]};
-        this.localConnection                 = new RTCPeerConnection(config);
-        this.localConnection.onicecandidate  = (e) => this.handleIceCandidate(e);
+        let config = {"iceServers":[{"urls":"stun:stun.l.google.com:19302"}]};
+        this.localConnection                            = new RTCPeerConnection(config); /*global RTCPeerConnection*/
+        this.localConnection.onicecandidate             = (e) => this.handleIceCandidate(e);
         this.localConnection.oniceconnectionstatechange = (e) => this.handleIceConnectionStateChange(e);
-        this.localConnection.onaddstream     = (e) => this.handleAddStream(e);
+        this.localConnection.ontrack                    = (e) => this.handleTrackEvent(e);
         
-        this.sendChannel                     = this.localConnection.createDataChannel("sendChannel");
-        this.sendChannel.onopen              = (e) => this.handleSendChannelStatusChange(e);
-        this.sendChannel.onclose             = (e) => this.handleSendChannelStatusChange(e);
+        this.sendChannel                                = this.localConnection.createDataChannel("sendChannel");
+        this.sendChannel.onopen                         = (e) => this.handleSendChannelStatusChange(e);
+        this.sendChannel.onclose                        = (e) => this.handleSendChannelStatusChange(e);
         
-        this.remoteConnection                = new RTCPeerConnection(config);
-        this.receiveChannel                  = null;
-        this.remoteConnection.ondatachannel  = (e) => this.receiveChannelCallback(e);
+        this.remoteConnection                           = new RTCPeerConnection(config);
+        this.receiveChannel                             = null;
+        this.remoteConnection.ondatachannel             = (e) => this.receiveChannelCallback(e);
         
-        this.localConnection.onicecandidate  = e => !e.candidate || this.remoteConnection.addIceCandidate(e.candidate)
-        .catch(this.handleAddCandidateError);
+        this.localConnection.onicecandidate             = e => !e.candidate || this.remoteConnection.addIceCandidate(e.candidate)
+                                                        .then(_ => this.controller.log("remote got candidate"))
+                                                        .catch(this.handleAddCandidateError);
     
-        this.remoteConnection.onicecandidate = e => !e.candidate || this.localConnection.addIceCandidate(e.candidate)
-        .catch(this.handleAddCandidateError);
+        this.remoteConnection.onicecandidate            = e => !e.candidate || this.localConnection.addIceCandidate(e.candidate)
+                                                        .then(_ => this.controller.log("local got candidate"))
+                                                        .catch(this.handleAddCandidateError);
         
         // Now create an offer to connect; this starts the process
         this.localConnection.createOffer()
@@ -162,7 +164,8 @@ class Connection{
     }
     
     handleSendChannelStatusChange(event){
-        this.controller.log("ENTER handleSendChannelStatusChange " + event);
+        this.controller.log("ENTER handleSendChannelStatusChange");
+        this.controller.log(event);
         
         if (this.sendChannel) {
             this.controller.sendChannelStatus = this.sendChannel.readyState;
@@ -174,7 +177,8 @@ class Connection{
     }
     
     receiveChannelCallback(event){
-        this.controller.log("ENTER receiveChannelCallback " + event);
+        this.controller.log("ENTER receiveChannelCallback");
+        this.controller.log(event);
         
         this.receiveChannel           = event.channel;
         this.receiveChannel.onmessage = (e) => this.handleReceiveMessage(e);
@@ -185,7 +189,8 @@ class Connection{
     }
     
     handleReceiveMessage(event){
-        this.controller.log("ENTER handleReceiveMessage " + event);
+        this.controller.log("ENTER handleReceiveMessage");
+        this.controller.log(event);
         
         this.controller.appendMessage(event.data);
         
@@ -193,7 +198,8 @@ class Connection{
     }
     
     handleReceiveChannelStatusChange(event){
-        this.controller.log("ENTER handleReceiveChannelStatusChange " + event);
+        this.controller.log("ENTER handleReceiveChannelStatusChange");
+        this.controller.log(event);
         
         if(this.receiveChannel){
             this.controller.log("receiveChannel status has changed to " + this.receiveChannel.readyState);
@@ -227,18 +233,20 @@ class Connection{
     }
     
     handleIceCandidate(event){
-        this.controller.log("ENTER handleIceCandidate " + event);
+        this.controller.log("ENTER handleIceCandidate");
         this.controller.log(event);
         this.controller.log("EXIT handleIceCandidate");
     }
     
     handleIceConnectionStateChange(event){
-        this.controller.log("Ice Connection State Changed to " + this.localConnection.iceConnectionState);
+        this.controller.log(`Ice Connection State Changed to ${this.localConnection.iceConnectionState}`);
         this.controller.log(event);
     }
     
-    handleAddStream(event){
-        this.controller.log("add stream: " + event);
+    handleTrackEvent(event){
+        this.controller.log("ENTER handleTrackEvent");
+        this.controller.log(event);
+        this.controller.log("EXIT handleTrackEvent");
     }
     
     sendMessage(message){
