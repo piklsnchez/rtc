@@ -2,7 +2,8 @@
 
 class WebRtc{
     constructor(){
-        this.ui = new Ui();
+        this.ui         = new Ui();
+        this.server     = new Server();
         this.connection = new Connection(this);
         
         this.ui.connectButton   .addEventListener('click', (e) => this.connectPeers(),    false);
@@ -51,6 +52,7 @@ class WebRtc{
     
     log(message){
         console.log(message);
+        //console.trace(message);
     }
     
     //Handle Connection Stuff
@@ -78,6 +80,32 @@ class WebRtc{
         this.ui.messageInputBox.value = "";
         this.ui.messageInputBox.focus();
     }
+    
+    sendOffer(descriptor){
+        this.log("ENTER sendDescriptor");
+        this.log(descriptor);
+        return this.server.sendOffer(descriptor);
+    }
+    
+    sendAnswer(){}
+}
+
+class Server{
+    constructor(){
+        this.url = "/descriptor";
+    }
+    
+    sendOffer(offer){
+        return fetch(this.url, {
+            "method":"post"
+            , "headers": {
+                "Content-type": "application/json"
+            }
+            , "body": JSON.stringify(offer)
+        })/*global fetch*/
+        .then(response => response.json())
+        .catch("ERROR");
+    }
 }
 
 class Ui{
@@ -92,11 +120,11 @@ class Ui{
 
 class Connection{
     constructor(controller){
-        this.controller          = controller;
-        this.localConnection     = null;
-        this.sendChannel         = null;
-        this.remoteConnection    = null;
-        this.receiveChannel      = null;
+        this.controller       = controller;
+        this.localConnection  = null;
+        this.sendChannel      = null;
+        this.remoteConnection = null;
+        this.receiveChannel   = null;
     }
     
     connectPeers() {
@@ -112,34 +140,30 @@ class Connection{
         this.sendChannel.onopen                         = (e) => this.handleSendChannelStatusChange(e);
         this.sendChannel.onclose                        = (e) => this.handleSendChannelStatusChange(e);
         
-        this.remoteConnection                           = new RTCPeerConnection(config);
         this.receiveChannel                             = null;
-        this.remoteConnection.ondatachannel             = (e) => this.receiveChannelCallback(e);
         
-        this.localConnection.onicecandidate             = e => !e.candidate || this.remoteConnection.addIceCandidate(e.candidate)
-                                                        .then(_ => this.controller.log("remote got candidate"))
-                                                        .catch(this.handleAddCandidateError);
-    
-        this.remoteConnection.onicecandidate            = e => !e.candidate || this.localConnection.addIceCandidate(e.candidate)
-                                                        .then(_ => this.controller.log("local got candidate"))
-                                                        .catch(this.handleAddCandidateError);
+        this.localConnection.onicecandidate             = e => this.handleAddCandidate(e);
         
-        // Now create an offer to connect; this starts the process
-        this.localConnection.createOffer()
-        .then(offer  => {
-            this.controller.log("offer");
+        /**
+         * we need to send an offer to the server than another client needs to get the offer and send an answer back to the server than the original client can accept the offer
+         **/
+        let offer = this.controller.getOffer();
+        
+        if("" !== offer){
             this.controller.log(offer);
-            this.localConnection.setLocalDescription(offer);
-        })
-        .then(()     => this.remoteConnection.setRemoteDescription(this.localConnection.localDescription))//set with remote ends details?
-        .then(()     => this.remoteConnection.createAnswer())
-        .then(answer => {
-            this.controller.log("answer");
-            this.controller.log(answer);
-            this.remoteConnection.setLocalDescription(answer);//set with local
-        })
-        .then(()     => this.localConnection.setRemoteDescription(this.remoteConnection.localDescription))
-        .catch(this.handleCreateDescriptionError);
+            this.localConnection.setRemoteDescription(offer)
+            .then(() => this.localConnection.createAnswer())
+            .then(answer => this.localConnection.setLocalDescription(answer))
+            .then(() => this.controller.sendAnswer(this.localConnection.localDescription))
+            .catch(e => this.handleCreateDescriptionError(e));
+        } else {
+            // Now create an offer to connect; this starts the process
+            this.localConnection.createOffer()
+            .then(offer => this.localConnection.setLocalDescription(offer))
+            .then(() => this.controller.sendOffer(this.localConnection.localDescription))
+            .then(answer => this.localConnection.setRemoteDescription(answer))
+            .catch(e => this.handleCreateDescriptionError(e));
+        }
         
         this.controller.log("EXIT connectPeers");
     }
@@ -153,12 +177,10 @@ class Connection{
         
         // Close the RTCPeerConnections
         this.localConnection.close();
-        this.remoteConnection.close();
     
         this.sendChannel      = null;
         this.receiveChannel   = null;
         this.localConnection  = null;
-        this.remoteConnection = null;
         
         this.controller.log("EXIT disconnectPeers");
     }
@@ -212,24 +234,17 @@ class Connection{
         this.controller.log("Unable to create an offer: " + error.toString());
     }
     
-    handleLocalAddCandidateSuccess() {
-        this.controller.log("ENTER handleLocalAddCandidateSuccess");
-        
-        this.controller.setConnectionStatus("connecting");
-        
-        this.controller.log("EXIT handleLocalAddCandidateSuccess");
+    handleAddCandidate(candidate){
+        if(candidate.candidate){
+            this.localConnection.addIceCandidate(candidate.candidate)
+            .catch(e => this.handleAddCandidateError(e));
+        }
     }
     
-    handleRemoteAddCandidateSuccess() {
-        this.controller.log("ENTER handleRemoteAddCandidateSuccess");
-        
-        this.controller.setConnectionStatus("connected");
-        
-        this.controller.log("EXIT handleRemoteAddCandidateSuccess");
-    }
-    
-    handleAddCandidateError() {
-        this.controller.log("addICECandidate failed!");
+    handleAddCandidateError(error) {
+        this.controller.log("ENTER handleAddCandidateError");
+        this.controller.log(error);
+        this.controller.log("EXIT handleAddCandidateError");
     }
     
     handleIceCandidate(event){
@@ -240,7 +255,6 @@ class Connection{
     
     handleIceConnectionStateChange(event){
         this.controller.log(`Ice Connection State Changed to ${this.localConnection.iceConnectionState}`);
-        this.controller.log(event);
     }
     
     handleTrackEvent(event){
@@ -254,4 +268,4 @@ class Connection{
     }
 }
 
-window.addEventListener('load', ()=> new WebRtc(), false);
+window.addEventListener('load', () => new WebRtc(), false);
