@@ -105,61 +105,31 @@ class WebRtc{
 
 class Server{
     constructor(controller){
-        this.offerUrl    = "/rest/offer";
-        this.answerUrl   = "/rest/answer";
-        this.eventUrl    = "/rest/event";
+        this.eventUrl    = "/ws/event";
         this.controller  = controller;
-        this.eventSource = new EventSource(this.eventUrl);/* global EventSource */
-        this.eventSource.onmessage = e => this.onEvent(e);
+	let secure = document.location.protocol === "https:";
+	let host   = document.location.hostname;
+        this.socket           = new WebSocket(`${secure ? "wss" : "ws"}://${host}:8080${this.eventUrl}`);/* global WebSocket */
+	this.socket.onopen    = e => this.onOpen(e);
+        this.socket.onmessage = e => this.onMessage(e);
     }
     
-    onEvent(event){
+    onOpen(event){
+	this.controller.log("Connecting");
         this.controller.log(event);
     }
-    
-    getOffer(){
-        return fetch(this.offerUrl, {
-            "method":"get"
-            , "headers": {
-                "Content-type": "application/json"
-            }
-        })/*global fetch*/
-        .then(response => response.json())
-        .catch("ERROR");
+
+    onMessage(event){
+	this.ocntroller.log("Message: ");
+    	this.controller.log(event);
     }
     
     sendOffer(offer){
-        return fetch(this.offerUrl, {
-            "method":"post"
-            , "headers": {
-                "Content-type": "application/json"
-            }
-            , "body": JSON.stringify(offer)
-        })
-        //.then(response => response.json())
-        .catch("ERROR");
-    }
-    
-    getAnswer(){
-        return fetch(this.answerUrl, {
-            "method":"get"
-            , "headers": {
-                "Content-type": "application/json"
-            }
-        })/*global fetch*/
-        .then(response => response.json())
-        .catch("ERROR");
-    }
+        this.socket.send(JSON.stringify(offer));
+    } 
     
     sendAnswer(offer){
-        return fetch(this.answerUrl, {
-            "method":"post"
-            , "headers": {
-                "Content-type": "application/json"
-            }
-            , "body": JSON.stringify(offer)
-        })
-        .catch("ERROR");
+        this.socket.send(JSON.stringify(offer));
     }
 }
 
