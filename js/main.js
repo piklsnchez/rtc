@@ -3,7 +3,7 @@
 class WebRtc{
     constructor(){
         this.ui         = new Ui();
-        this.server     = new Server();
+        this.server     = new Server(this);
         this.connection = new Connection(this);
         
         this.ui.connectButton   .addEventListener('click', e => this.connectPeers(),    false);
@@ -104,9 +104,17 @@ class WebRtc{
 }
 
 class Server{
-    constructor(){
-        this.offerUrl  = "/rest/offer";
-        this.answerUrl = "/rest/answer";
+    constructor(controller){
+        this.offerUrl    = "/rest/offer";
+        this.answerUrl   = "/rest/answer";
+        this.eventUrl    = "/rest/event";
+        this.controller  = controller;
+        this.eventSource = new EventSource(this.eventUrl);/* global EventSource */
+        this.eventSource.onmessage = e => this.onEvent(e);
+    }
+    
+    onEvent(event){
+        this.controller.log(event);
     }
     
     getOffer(){
