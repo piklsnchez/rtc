@@ -9,16 +9,19 @@
 </head>
 <body>
   <h1>MDN - WebRTC: Simple RTCDataChannel sample</h1>
-  
+
   <div class="controlbox">
     <button id="connectButton" name="connectButton" class="connect buttonleft">
       Connect
     </button>
+      <button id="offerButton" name="offerButton" class="connect">
+        Send Offer
+      </button>
     <button id="disconnectButton" name="disconnectButton" class="disconnect buttonright" disabled>
       Disconnect
     </button>
   </div>
-  
+
   <div class="messagebox input">
     <label for="message">Enter a message:
       <input type="text" name="message" id="message" placeholder="Message text" inputmode="latin" size=60 maxlength=120 disabled>
