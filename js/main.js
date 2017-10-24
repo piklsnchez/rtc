@@ -21,11 +21,11 @@ class WebRtc{
         this.ui.offerButton     .addEventListener('click', e => this.initiateOffer(),    false);
         this.ui.disconnectButton.addEventListener('click', e => this.disconnectPeers(), false);
         this.ui.sendButton      .addEventListener('click', e => this.sendMessage(),     false);
-        this.connectionStatus("disconnected");
+        this.connectionStatus = "disconnected";
     }
 
     //Controller Stuff
-    connectionStatus(status){
+    set connectionStatus(status){
         switch(status){
             case "disconnected":
                 this.ui.connectButton.disabled    = false;
@@ -48,16 +48,15 @@ class WebRtc{
         }
     }
 
-    sendChannelStatus(status){
+    set sendChannelStatus(status){
         switch(status){
             case "open":
                 this.ui.messageInputBox.disabled  = false;
                 this.ui.messageInputBox.focus();
                 this.ui.sendButton.disabled       = false;
-                this.ui.disconnectButton.disabled = false;
-                this.ui.connectButton.disabled    = true;
                 break;
             default:
+              this.log(`status: ${status}`);
                 this.ui.messageInputBox.disabled  = true;
                 this.ui.sendButton.disabled       = true;
                 this.ui.connectButton.disabled    = false;
@@ -82,13 +81,13 @@ class WebRtc{
     connectPeers(){
       //this.connectionStatus("connecting");
       this.connection.connectPeers();
-      this.connectionStatus("connected");
+      this.connectionStatus = "connected";
     }
     disconnectPeers(){
         this.connection.disconnectPeers();
-        this.connectionStatus("disconnected");
-        this.ui.messageInputBox.value     = "";
-        this.ui.messageInputBox.disabled  = true;
+        this.connectionStatus            = "disconnected";
+        this.ui.messageInputBox.value    = "";
+        this.ui.messageInputBox.disabled = true;
     }
     //Handle Message Stuff
     sendMessage(){
@@ -171,9 +170,10 @@ class Connection{
       this.localConnection.onnegotiationneeded        = e => this.handleNegotiationNeeded(e);
       this.localConnection.ontrack                    = e => this.handleTrackEvent(e);
       this.sendChannel                                = this.localConnection.createDataChannel("sendChannel");
+      this.localConnection.ondatachannel              = e => this.onSendChannelConnect(e);
       this.sendChannel.onopen                         = e => this.handleSendChannelStatusChange(e);
       this.sendChannel.onclose                        = e => this.handleSendChannelStatusChange(e);
-      this.receiveChannel                             = null;
+      this.sendChannel.onmessage                      = m => this.onSendChannelMessage(m);
       this.controller.log("EXIT connectPeers");
     }
 
@@ -202,93 +202,83 @@ class Connection{
     }
 
     handleAddCandidate(candidate){
-        if(null != this.localConnection.remoteDescription && this.localConnection.remoteDescription.type && candidate.candidate){
-            this.controller.log("ENTER handleAddCandidate");
-            this.controller.log(candidate.candidate);
-            this.localConnection.addIceCandidate(candidate.candidate)
-            .catch(e => this.handleAddCandidateError(e));
-            this.controller.log("EXIT handleAddCandidate");
-        }
+      if(null != this.localConnection.remoteDescription && this.localConnection.remoteDescription.type && candidate.candidate){
+        this.controller.log("ENTER handleAddCandidate");
+        this.controller.log(candidate.candidate);
+        this.localConnection.addIceCandidate(candidate.candidate)
+        .catch(e => this.handleAddCandidateError(e));
+        this.controller.log("EXIT handleAddCandidate");
+      }
     }
 
     handleAddCandidateError(error) {
-        this.controller.trace(error);
+      this.controller.trace(error);
     }
 
     handleStateChange(event){
-        this.controller.log("ENTER handleStateChange");
-        //this.controller.log(`iceConnectionState: ${event.target.iceConnectionState}; iceGatheringState: ${event.target.iceGatheringState}; signalingState: ${event.target.signalingState}`);
-        this.controller.log("EXIT handleStateChange");
+      this.controller.log("ENTER handleStateChange");
+      this.controller.log(`iceConnectionState: ${event.target.iceConnectionState}; iceGatheringState: ${event.target.iceGatheringState}; signalingState: ${event.target.signalingState}`);
+      this.controller.log("EXIT handleStateChange");
     }
 
     handleNegotiationNeeded(event){
-        this.controller.log("ENTER handleNegotiationNeeded");
-        //this.controller.log(event);
-        this.controller.log("EXIT handleNegotiationNeeded");
+      this.controller.log("ENTER handleNegotiationNeeded");
+      //this.controller.log(event);
+      this.controller.log("EXIT handleNegotiationNeeded");
     }
 
     disconnectPeers() {
-        this.controller.log("ENTER disconnectPeers");
-        // Close the RTCDataChannels if they're open.
-        if(this.sendChannel !== null) this.sendChannel.close();
-        if(this.receiveChannel !== null) this.receiveChannel.close();
-        // Close the RTCPeerConnections
-        this.localConnection.close();
-        this.sendChannel      = null;
-        this.receiveChannel   = null;
-        this.localConnection  = null;
-        this.controller.log("EXIT disconnectPeers");
+      this.controller.log("ENTER disconnectPeers");
+      // Close the RTCDataChannels if they're open.
+      if(this.sendChannel !== null) this.sendChannel.close();
+      if(this.receiveChannel !== null) this.receiveChannel.close();
+      // Close the RTCPeerConnections
+      this.localConnection.close();
+      this.sendChannel      = null;
+      this.localConnection  = null;
+      this.controller.log("EXIT disconnectPeers");
     }
 
     handleSendChannelStatusChange(event){
-        this.controller.log("ENTER handleSendChannelStatusChange");
-        //this.controller.log(event);
-        if (this.sendChannel) {
-            this.controller.sendChannelStatus = this.sendChannel.readyState;
-        } else {
-            this.controller.sendChannelStatus = "disconnected";
-        }
-        this.controller.log("EXIT handleSendChannelStatusChange");
+      this.controller.log("ENTER handleSendChannelStatusChange");
+      this.controller.log(event);
+      if (this.sendChannel) {
+        this.controller.sendChannelStatus = this.sendChannel.readyState;
+      } else {
+        this.controller.sendChannelStatus = "disconnected";
+      }
+      this.controller.log("EXIT handleSendChannelStatusChange");
     }
 
-    receiveChannelCallback(event){
-        this.controller.log("ENTER receiveChannelCallback");
-        //this.controller.log(event);
-        this.receiveChannel           = event.channel;
-        this.receiveChannel.onmessage = (e) => this.handleReceiveMessage(e);
-        this.receiveChannel.onopen    = (e) => this.handleReceiveChannelStatusChange(e);
-        this.receiveChannel.onclose   = (e) => this.handleReceiveChannelStatusChange(e);
-        this.controller.log("EXIT receiveChannelCallback");
+    onSendChannelConnect(e){
+      this.sendChannel           = e.channel;
+      this.sendChannel.onopen    = e => this.handleSendChannelStatusChange(e);
+      this.sendChannel.onclose   = e => this.handleSendChannelStatusChange(e);
+      this.sendChannel.onmessage = m => this.onSendChannelMessage(m);
+    }
+
+    onSendChannelMessage(event){
+      this.controller.log("ENTER onSendChannelMessage");
+      this.controller.log(event);
+      this.controller.appendMessage(event.data);
+      this.controller.log("EXIT onSendChannelMessage");
     }
 
     sendMessage(message){
-        this.sendChannel.send(message);
+      this.sendChannel.send(message);
     }
 
     handleReceiveMessage(event){
-        this.controller.log("ENTER handleReceiveMessage");
-        //this.controller.log(event);
-        this.controller.appendMessage(event.data);
-        this.controller.log("EXIT handleReceiveMessage");
-    }
-
-    handleReceiveChannelStatusChange(event){
-        this.controller.log("ENTER handleReceiveChannelStatusChange");
-        //this.controller.log(event);
-        if(this.receiveChannel){
-            this.controller.log("receiveChannel status has changed to " + this.receiveChannel.readyState);
-        }
-        this.controller.log("EXIT handleReceiveChannelStatusChange");
     }
 
     handleCreateDescriptionError(error){
-        this.controller.trace("Unable to create an offer: " + error.toString());
+      this.controller.trace("Unable to create an offer: " + error.toString());
     }
 
     handleTrackEvent(event){
-        this.controller.log("ENTER handleTrackEvent");
-        //this.controller.log(event);
-        this.controller.log("EXIT handleTrackEvent");
+      this.controller.log("ENTER handleTrackEvent");
+      this.controller.log(event);
+      this.controller.log("EXIT handleTrackEvent");
     }
 }
 
