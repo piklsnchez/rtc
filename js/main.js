@@ -265,6 +265,7 @@ class Connection{
     }
 
     sendMessage(message){
+      this.controller.appendMessage(message);
       this.sendChannel.send(message);
     }
 
