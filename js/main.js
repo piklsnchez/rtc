@@ -2,12 +2,14 @@
 
 class Ui{
     constructor(){
-        this.connectButton    = document.getElementById('connectButton');
-        this.offerButton      = document.getElementById('offerButton');
-        this.disconnectButton = document.getElementById('disconnectButton');
-        this.sendButton       = document.getElementById('sendButton');
-        this.messageInputBox  = document.getElementById('message');
-        this.receiveBox       = document.getElementById('receivebox');
+        this.connectButton     = document.getElementById("connectButton");
+        this.offerButton       = document.getElementById("offerButton");
+        this.screenShareButton = document.getElementById("screenShareButton");
+        this.disconnectButton  = document.getElementById("disconnectButton");
+        this.sendButton        = document.getElementById("sendButton");
+        this.messageInputBox   = document.getElementById("message");
+        this.receiveBox        = document.getElementById("receivebox");
+        this.screenShare       = document.querySelector(".screenShareVideo");
     }
 }
 
@@ -17,10 +19,11 @@ class WebRtc{
         this.server     = new Server(this);
         this.connection = new Connection(this);
 
-        this.ui.connectButton   .addEventListener('click', e => this.connectPeers(),    false);
-        this.ui.offerButton     .addEventListener('click', e => this.initiateOffer(),    false);
-        this.ui.disconnectButton.addEventListener('click', e => this.disconnectPeers(), false);
-        this.ui.sendButton      .addEventListener('click', e => this.sendMessage(),     false);
+        this.ui.connectButton    .addEventListener('click', e => this.connectPeers(),        false);
+        this.ui.offerButton      .addEventListener('click', e => this.initiateOffer(),       false);
+        this.ui.screenShareButton.addEventListener('click', e => this.initiateScreenShare(), false);
+        this.ui.disconnectButton .addEventListener('click', e => this.disconnectPeers(),     false);
+        this.ui.sendButton       .addEventListener('click', e => this.sendMessage(),         false);
         this.connectionStatus = "disconnected";
     }
 
@@ -28,22 +31,37 @@ class WebRtc{
     set connectionStatus(status){
         switch(status){
             case "disconnected":
-                this.ui.connectButton.disabled    = false;
-                this.ui.offerButton.disabled      = true;
-                this.ui.disconnectButton.disabled = true;
-                this.ui.sendButton.disabled       = true;
+                this.ui.connectButton.disabled     = false;
+                this.ui.offerButton.disabled       = true;
+                this.ui.screenShareButton.disabled = true;
+                this.ui.disconnectButton.disabled  = true;
+                this.ui.messageInputBox.disabled   = true;
+                this.ui.sendButton.disabled        = true;
                 break;
             case "connecting":
-                this.ui.connectButton.disabled    = true;
-                this.ui.offerButton.disabled      = true;
-                this.ui.disconnectButton.disabled = true;
-                this.ui.sendButton.disabled       = true;
+                this.ui.connectButton.disabled     = true;
+                this.ui.offerButton.disabled       = true;
+                this.ui.screenShareButton.disabled = true;
+                this.ui.disconnectButton.disabled  = true;
+                this.ui.messageInputBox.disabled   = true;
+                this.ui.sendButton.disabled        = true;
                 break;
             case "connected":
-                this.ui.connectButton.disabled    = true;
-                this.ui.offerButton.disabled      = false;
-                this.ui.disconnectButton.disabled = false;
-                this.ui.sendButton.disabled       = false;
+                this.ui.connectButton.disabled     = true;
+                this.ui.offerButton.disabled       = true;
+                this.ui.screenShareButton.disabled = false;
+                this.ui.disconnectButton.disabled  = false;
+                this.ui.messageInputBox.disabled   = true;
+                this.ui.sendButton.disabled        = true;
+                break;
+            case "established":
+                this.ui.connectButton.disabled     = true;
+                this.ui.offerButton.disabled       = true;
+                this.ui.screenShareButton.disabled = false;
+                this.ui.disconnectButton.disabled  = false;
+                this.ui.messageInputBox.disabled   = false;
+                this.ui.messageInputBox.focus();
+                this.ui.sendButton.disabled        = false;
                 break;
         }
     }
@@ -51,17 +69,15 @@ class WebRtc{
     set sendChannelStatus(status){
         switch(status){
             case "open":
-                this.ui.messageInputBox.disabled  = false;
-                this.ui.messageInputBox.focus();
-                this.ui.sendButton.disabled       = false;
-                break;
+              this.connectionStatus = "established";
+              break;
+            case "disconnected":
+              this.connectionStatus = "disconnected";
+              break;
             default:
               this.log(`status: ${status}`);
-                this.ui.messageInputBox.disabled  = true;
-                this.ui.sendButton.disabled       = true;
-                this.ui.connectButton.disabled    = false;
-                this.ui.disconnectButton.disabled = true;
-                break;
+              this.connectionStatus = "connected";
+              break;
         }
     }
     appendMessage(message){
@@ -87,7 +103,6 @@ class WebRtc{
         this.connection.disconnectPeers();
         this.connectionStatus            = "disconnected";
         this.ui.messageInputBox.value    = "";
-        this.ui.messageInputBox.disabled = true;
     }
     //Handle Message Stuff
     sendMessage(){
@@ -111,6 +126,17 @@ class WebRtc{
     doAnswer(answer){
       this.connection.doAnswer(answer);
     }
+    initiateScreenShare(){
+      this.connection.initiateScreenShare();
+    }
+    addStream(stream){
+      this.log("ENTER addStream");
+      this.log(stream);
+      //this.ui.screenShare.src       = window.URL.createObjectURL(stream);
+      this.ui.screenShare.srcObject = stream;
+      this.ui.screenShare.autoplay  = true;
+      this.log("EXIT addStream");
+    }
 }
 
 class Server{
@@ -119,7 +145,11 @@ class Server{
         this.controller  = controller;
         let secure = document.location.protocol === "https:";
         let host   = document.location.hostname;
-        this.socket           = new WebSocket(`${secure ? "wss" : "ws"}://${host}:8080${this.eventUrl}`);/* global WebSocket */
+        let port   = document.location.port;
+        if("" !== port){
+          port = `:${port}`;
+        }
+        this.socket           = new WebSocket(`${secure ? "wss" : "ws"}://${host}${port}${this.eventUrl}`);/* global WebSocket */
         this.socket.onopen    = e => this.onOpen(e);
         this.socket.onmessage = e => this.onMessage(e);
         this.socket.onerror   = e => this.controller.trace(e);
@@ -152,11 +182,10 @@ class Server{
 
 class Connection{
     constructor(controller){
-      this.controller       = controller;
-      this.localConnection  = null;
-      this.sendChannel      = null;
-      this.remoteConnection = null;
-      this.receiveChannel   = null;
+      this.controller      = controller;
+      this.localConnection = null;
+      this.sendChannel     = null;
+      this.role            = "";//offerer/answerer
     }
 
     connectPeers() {
@@ -168,27 +197,31 @@ class Connection{
       this.localConnection.oniceconnectionstatechange = e => this.handleStateChange(e);
       this.localConnection.onsignalingstatechange     = e => this.handleStateChange(e);
       this.localConnection.onnegotiationneeded        = e => this.handleNegotiationNeeded(e);
-      this.localConnection.ontrack                    = e => this.handleTrackEvent(e);
-      this.sendChannel                                = this.localConnection.createDataChannel("sendChannel");
+      this.localConnection.onaddstream                = s => this.handleTrackEvent(s);
+      /*this.sendChannel                                = this.localConnection.createDataChannel("sendChannel");
       this.localConnection.ondatachannel              = e => this.onSendChannelConnect(e);
       this.sendChannel.onopen                         = e => this.handleSendChannelStatusChange(e);
       this.sendChannel.onclose                        = e => this.handleSendChannelStatusChange(e);
-      this.sendChannel.onmessage                      = m => this.onSendChannelMessage(m);
+      this.sendChannel.onmessage                      = m => this.onSendChannelMessage(m);*/
       this.controller.log("EXIT connectPeers");
     }
 
-    initiateOffer(){
-      this.controller.log("ENTER initiateOffer");
+    handleNegotiationNeeded(event){
+      this.controller.log("ENTER handleNegotiationNeeded");
+      this.controller.log(this.localConnection.signalingState);
       this.localConnection.createOffer()
       .then(offer => this.localConnection.setLocalDescription(offer))
       .then(()    => this.controller.sendOffer(this.localConnection.localDescription))
-      .catch(e    => this.handleCreateDescriptionError(e));
-      this.controller.log("EXIT initiateOffer");
+      .catch(e    => this.controller.trace(e));
+      this.controller.log("EXIT handleNegotiationNeeded");
     }
 
     doOffer(offer){
+      this.controller.log(this.localConnection);
+      this.connectPeers();
       this.localConnection.setRemoteDescription(new RTCSessionDescription(offer))
       .then(_ => this.controller.log("set offer"))
+      .then(_ => this.doScreenShare())
       .then(_ => this.localConnection.createAnswer())
       .then(answer => this.localConnection.setLocalDescription(answer))
       .then(_ => this.controller.sendAnswer(this.localConnection.localDescription))
@@ -196,58 +229,69 @@ class Connection{
     }
 
     doAnswer(answer){
+      this.controller.log(this.localConnection);
       this.localConnection.setRemoteDescription(new RTCSessionDescription(answer))
       .then(_ => this.controller.log("set answer"))
       .catch(e => this.controller.trace(e));
     }
 
+    initiateScreenShare(){
+      return this.doScreenShare();
+    }
+
+    doScreenShare(){
+      return navigator.mediaDevices.getUserMedia({"video":{"mandatory":{"chromeMediaSource":"screen"}}})
+      .then(stream => {
+        this.controller.log(stream);
+        return stream;
+      })
+      .then(stream => this.localConnection.addStream(stream))
+      .catch(e => this.controller.trace(e));
+    }
+
+    handleTrackEvent(event){
+      this.controller.log("ENTER handleTrackEvent");
+      this.controller.log(event);
+      this.controller.addStream(event.stream);
+      this.controller.log("EXIT handleTrackEvent");
+    }
+
     handleAddCandidate(candidate){
       if(null != this.localConnection.remoteDescription && this.localConnection.remoteDescription.type && candidate.candidate){
-        this.controller.log("ENTER handleAddCandidate");
+        //this.controller.log("ENTER handleAddCandidate");
         this.controller.log(candidate.candidate);
         this.localConnection.addIceCandidate(candidate.candidate)
-        .catch(e => this.handleAddCandidateError(e));
-        this.controller.log("EXIT handleAddCandidate");
+        .catch(e => this.controller.trace(e));
+        //this.controller.log("EXIT handleAddCandidate");
       }
     }
 
-    handleAddCandidateError(error) {
-      this.controller.trace(error);
-    }
-
     handleStateChange(event){
-      this.controller.log("ENTER handleStateChange");
-      this.controller.log(`iceConnectionState: ${event.target.iceConnectionState}; iceGatheringState: ${event.target.iceGatheringState}; signalingState: ${event.target.signalingState}`);
-      this.controller.log("EXIT handleStateChange");
-    }
-
-    handleNegotiationNeeded(event){
-      this.controller.log("ENTER handleNegotiationNeeded");
-      //this.controller.log(event);
-      this.controller.log("EXIT handleNegotiationNeeded");
+      //this.controller.log("ENTER handleStateChange");
+      //this.controller.log(`iceConnectionState: ${event.target.iceConnectionState}; iceGatheringState: ${event.target.iceGatheringState}; signalingState: ${event.target.signalingState}`);
+      //this.controller.log("EXIT handleStateChange");
     }
 
     disconnectPeers() {
-      this.controller.log("ENTER disconnectPeers");
-      // Close the RTCDataChannels if they're open.
-      if(this.sendChannel !== null) this.sendChannel.close();
-      if(this.receiveChannel !== null) this.receiveChannel.close();
-      // Close the RTCPeerConnections
-      this.localConnection.close();
-      this.sendChannel      = null;
-      this.localConnection  = null;
-      this.controller.log("EXIT disconnectPeers");
+      //this.controller.log("ENTER disconnectPeers");
+      if(this.sendChannel !== null)     this.sendChannel.close();
+      if(this.receiveChannel !== null)  this.receiveChannel.close();
+      if(this.localConnection !== null) this.localConnection.close();
+      this.sendChannel                 = null;
+      this.localConnection             = null;
+      this.controller.connectionStatus = "disconnected";
+      //this.controller.log("EXIT disconnectPeers");
     }
 
     handleSendChannelStatusChange(event){
-      this.controller.log("ENTER handleSendChannelStatusChange");
-      this.controller.log(event);
+      //this.controller.log("ENTER handleSendChannelStatusChange");
+      //this.controller.log(event);
       if (this.sendChannel) {
         this.controller.sendChannelStatus = this.sendChannel.readyState;
       } else {
         this.controller.sendChannelStatus = "disconnected";
       }
-      this.controller.log("EXIT handleSendChannelStatusChange");
+      //this.controller.log("EXIT handleSendChannelStatusChange");
     }
 
     onSendChannelConnect(e){
@@ -258,10 +302,10 @@ class Connection{
     }
 
     onSendChannelMessage(event){
-      this.controller.log("ENTER onSendChannelMessage");
-      this.controller.log(event);
+      //this.controller.log("ENTER onSendChannelMessage");
+      //this.controller.log(event);
       this.controller.appendMessage(event.data);
-      this.controller.log("EXIT onSendChannelMessage");
+      //this.controller.log("EXIT onSendChannelMessage");
     }
 
     sendMessage(message){
@@ -270,16 +314,6 @@ class Connection{
     }
 
     handleReceiveMessage(event){
-    }
-
-    handleCreateDescriptionError(error){
-      this.controller.trace("Unable to create an offer: " + error.toString());
-    }
-
-    handleTrackEvent(event){
-      this.controller.log("ENTER handleTrackEvent");
-      this.controller.log(event);
-      this.controller.log("EXIT handleTrackEvent");
     }
 }
 

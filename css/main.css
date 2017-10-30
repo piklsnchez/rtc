@@ -6,6 +6,7 @@ body {
 .messagebox {
   border: 1px solid black;
   padding: 5px;
+  margin: 5px;
   width: 450px;
 }
 
@@ -19,6 +20,15 @@ body {
 
 .controlbox {
   padding: 5px;
+  margin: 5px;
   width: 450px;
   height: 28px;
+}
+
+.screenShare {
+  border: 1px solid black;
+  padding: 5px;
+  margin: 5px;
+  width: 450px;
+  height: 350px;
 }
