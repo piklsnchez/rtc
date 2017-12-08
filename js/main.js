@@ -2,15 +2,18 @@
 
 class Ui{
   constructor(controller){
-    this.controller        = controller;
-    this.connectButton     = document.getElementById("connectButton");
-    this.offerButton       = document.getElementById("offerButton");
-    this.screenShareButton = document.getElementById("screenShareButton");
-    this.disconnectButton  = document.getElementById("disconnectButton");
-    this.sendButton        = document.getElementById("sendButton");
-    this.messageInputBox   = document.getElementById("message");
-    this.receiveBox        = document.getElementById("receivebox");
-    this.screenShare       = document.querySelector(".screenShareVideo");
+    this.controller          = controller;
+    this.connectButton       = document.getElementById("connectButton");
+    this.offerButton         = document.getElementById("offerButton");
+    this.screenShareButton   = document.getElementById("screenShareButton");
+    this.disconnectButton    = document.getElementById("disconnectButton");
+    this.sendButton          = document.getElementById("sendButton");
+    this.messageInputBox     = document.getElementById("message");
+    this.receiveBox          = document.getElementById("receivebox");
+    this.screenShare         = document.querySelector(".screenShareVideo");
+    this._iceGatheringState  = document.getElementById("iceGatheringState");
+    this._iceConnectionState = document.getElementById("iceConnectionState");
+    this._signalingState     = document.getElementById("signalingState");
   }
 
   wireEvents(){
@@ -19,8 +22,6 @@ class Ui{
     this.screenShareButton.addEventListener("click", e => this.controller.initiateScreenShare(), false);
     this.disconnectButton .addEventListener("click", e => this.controller.disconnectPeers(),     false);
     this.sendButton       .addEventListener("click", e => this.controller.sendMessage(),         false);
-    
-    //this.screenShare      .addEventListener("progress", p => this.controller.log(p));
   }
 
   disconnected(){
@@ -59,9 +60,19 @@ class Ui{
     this.messageInputBox.focus();
     this.sendButton.disabled        = false;
   }
+  
+  set iceGatheringState(state){
+      this._iceGatheringState.querySelector(`input[value='${state}']`).checked = true;
+  }
+  set iceConnectionState(state){
+      this._iceConnectionState.querySelector(`input[value='${state}']`).checked = true;
+  }
+  set signalingState(state){
+      this._signalingState.querySelector(`input[value='${state}']`).checked = true;
+  }
 }
 
-class WebRtc{
+class WebRtc{//Controller
   constructor(){
     this._connectionStatus;
     this._sendChannelStatus;
@@ -113,7 +124,11 @@ class WebRtc{
   get sendChannelStatus(){
     return this._sendChannelStatus;
   }
-
+  changeState(state){
+    this.ui.iceGatheringState  = state.iceGatheringState;
+    this.ui.iceConnectionState = state.iceConnectionState;
+    this.ui.signalingState     = state.signalingState;
+  }
   appendMessage(message){
     let el       = document.createElement("p");
     let textNode = document.createTextNode(message);
@@ -165,7 +180,6 @@ class WebRtc{
   addStream(stream){
     this.log("ENTER addStream");
     this.log(stream);
-    //this.ui.screenShare.src       = window.URL.createObjectURL(stream);
     this.ui.screenShare.srcObject = stream;
     this.ui.screenShare.autoplay  = true;
     this.log("EXIT addStream");
@@ -184,7 +198,7 @@ class Server{
     }
     this.socket           = new WebSocket(`${secure ? "wss" : "ws"}://${host}${port}${this.eventUrl}`);/* global WebSocket */
     this.socket.onopen    = m => this.onOpen(m);
-    this.socket.onclose   = m => {this.controller.log("websocket closing"); this.controller.log(m);};
+    this.socket.onclose   = m => {this.controller.log(`${Date.now()} websocket closing`); this.controller.log(m);};
     this.socket.onmessage = m => this.onMessage(m);
     this.socket.onerror   = e => this.controller.trace(e);
   }
@@ -224,7 +238,7 @@ class Connection{
 
   connectPeers() {
     this.controller.log("ENTER connectPeers");
-    let config = {"iceServers":[{"urls":"stun:stun.l.google.com:19302"}]};
+    let config = {"iceServers":[{"urls":"stun:stun.l.google.com:19302"}]};//stun.stunprotocol.org:3478//https://gist.github.com/mondain/b0ec1cf5f60ae726202e
     this.localConnection = new RTCPeerConnection(config); /*global RTCPeerConnection*/
     this.localConnection.onicecandidate             = e => this.handleAddCandidate(e);
     this.localConnection.onicegatheringstatechange  = e => this.handleStateChange(e);
@@ -274,7 +288,7 @@ class Connection{
       this.controller.log(stream);
       return stream;
     })
-    .then(stream => {this.controller.addStream(stream); return stream;})
+    //.then(stream => {this.controller.addStream(stream); return stream;})
     .then(stream => this.localConnection.addStream(stream))
     .catch(e     => this.controller.trace(e));
   }
@@ -300,15 +314,15 @@ class Connection{
 
   handleStateChange(event){
     this.controller.log("ENTER handleStateChange");
-    this.controller.log(`iceConnectionState: ${event.target.iceConnectionState}; iceGatheringState: ${event.target.iceGatheringState}; signalingState: ${event.target.signalingState}`);
+    this.controller.changeState(event.target);
     this.controller.log("EXIT handleStateChange");
   }
 
   disconnectPeers() {
     //this.controller.log("ENTER disconnectPeers");
-    if(this.sendChannel !== null)     this.sendChannel.close();
-    if(this.receiveChannel !== null)  this.receiveChannel.close();
-    if(this.localConnection !== null) this.localConnection.close();
+    if(typeof this.sendChannel     !== "undefined" && this.sendChannel     !== null) this.sendChannel.close();
+    if(typeof this.receiveChannel  !== "undefined" && this.receiveChannel  !== null) this.receiveChannel.close();
+    if(typeof this.localConnection !== "undefined" && this.localConnection !== null) this.localConnection.close();
     this.sendChannel                 = null;
     this.localConnection             = null;
     this.controller.connectionStatus = "disconnected";

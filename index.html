@@ -9,6 +9,30 @@
 </head>
 <body>
   <h1>WebRTC Example</h1>
+  <div class="statebox">
+      <div id="iceGatheringState">
+          <input type="radio" name="iceGatheringState" value="new" />
+          <input type="radio" name="iceGatheringState" value="gathering" />
+          <input type="radio" name="iceGatheringState" value="complete" />
+      </div>
+      <div id="iceConnectionState">
+          <input type="radio" name="iceConnectionState" value="new" />
+          <input type="radio" name="iceConnectionState" value="checking" />
+          <input type="radio" name="iceConnectionState" value="connected" />
+          <input type="radio" name="iceConnectionState" value="completed" />
+          <input type="radio" name="iceConnectionState" value="failed" />
+          <input type="radio" name="iceConnectionState" value="disconnected" />
+          <input type="radio" name="iceConnectionState" value="closed" />
+      </div>
+      <div id="signalingState">
+          <input type="radio" name="signalingState" value="stable" />
+          <input type="radio" name="signalingState" value="have-local-offer" />
+          <input type="radio" name="signalingState" value="have-remote-offer" />
+          <input type="radio" name="signalingState" value="have-local-pranswer" />
+          <input type="radio" name="signalingState" value="have-remote-pranswer" />
+          <input type="radio" name="signalingState" value="closed" />
+      </div>
+  </div>
   <div class="controlbox">
     <button id="connectButton" name="connectButton" class="connect">
       Connect
