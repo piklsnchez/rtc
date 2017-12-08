@@ -14,11 +14,13 @@ class Ui{
   }
 
   wireEvents(){
-    this.connectButton    .addEventListener('click', e => this.controller.connectPeers(),        false);
-    this.offerButton      .addEventListener('click', e => this.controller.initiateOffer(),       false);
-    this.screenShareButton.addEventListener('click', e => this.controller.initiateScreenShare(), false);
-    this.disconnectButton .addEventListener('click', e => this.controller.disconnectPeers(),     false);
-    this.sendButton       .addEventListener('click', e => this.controller.sendMessage(),         false);
+    this.connectButton    .addEventListener("click", e => this.controller.connectPeers(),        false);
+    this.offerButton      .addEventListener("click", e => this.controller.initiateOffer(),       false);
+    this.screenShareButton.addEventListener("click", e => this.controller.initiateScreenShare(), false);
+    this.disconnectButton .addEventListener("click", e => this.controller.disconnectPeers(),     false);
+    this.sendButton       .addEventListener("click", e => this.controller.sendMessage(),         false);
+    
+    //this.screenShare      .addEventListener("progress", p => this.controller.log(p));
   }
 
   disconnected(){
@@ -181,8 +183,9 @@ class Server{
       port = `:${port}`;
     }
     this.socket           = new WebSocket(`${secure ? "wss" : "ws"}://${host}${port}${this.eventUrl}`);/* global WebSocket */
-    this.socket.onopen    = e => this.onOpen(e);
-    this.socket.onmessage = e => this.onMessage(e);
+    this.socket.onopen    = m => this.onOpen(m);
+    this.socket.onclose   = m => {this.controller.log("websocket closing"); this.controller.log(m);};
+    this.socket.onmessage = m => this.onMessage(m);
     this.socket.onerror   = e => this.controller.trace(e);
   }
 
@@ -193,7 +196,7 @@ class Server{
 
   onMessage(event){
     this.controller.log("Message: ");
-  	this.controller.log(event);
+    this.controller.log(event);
     let json = JSON.parse(event.data);
     if(json.type === "offer"){
       this.controller.doOffer(json);
@@ -251,33 +254,29 @@ class Connection{
     this.controller.log(this.localConnection);
     this.connectPeers();
     this.localConnection.setRemoteDescription(new RTCSessionDescription(offer))
-    .then(_ => this.controller.log("set offer"))
-    .then(_ => this.doScreenShare())
-    .then(_ => this.localConnection.createAnswer())
+    .then(_      => this.controller.log("set offer"))
+    .then(_      => this.localConnection.createAnswer())
     .then(answer => this.localConnection.setLocalDescription(answer))
-    .then(_ => this.controller.sendAnswer(this.localConnection.localDescription))
-    .catch(e => this.controller.trace(e));
+    .then(_      => this.controller.sendAnswer(this.localConnection.localDescription))
+    .catch(e     => this.controller.trace(e));
   }
 
   doAnswer(answer){
     this.controller.log(this.localConnection);
     this.localConnection.setRemoteDescription(new RTCSessionDescription(answer))
-    .then(_ => this.controller.log("set answer"))
+    .then(_  => this.controller.log("set answer"))
     .catch(e => this.controller.trace(e));
   }
 
-  initiateScreenShare(){
-    return this.doScreenShare();
-  }
-
-  doScreenShare(){
+  initiateScreenShare(){    
     return navigator.mediaDevices.getUserMedia({"video":{"mandatory":{"chromeMediaSource":"screen"}}})
     .then(stream => {
       this.controller.log(stream);
       return stream;
     })
+    .then(stream => {this.controller.addStream(stream); return stream;})
     .then(stream => this.localConnection.addStream(stream))
-    .catch(e => this.controller.trace(e));
+    .catch(e     => this.controller.trace(e));
   }
 
   handleTrackEvent(event){
@@ -288,19 +287,21 @@ class Connection{
   }
 
   handleAddCandidate(candidate){
-    if(null != this.localConnection.remoteDescription && this.localConnection.remoteDescription.type && candidate.candidate){
-      //this.controller.log("ENTER handleAddCandidate");
+    this.controller.log("ENTER handleAddCandidate");
+    if(null !== this.localConnection.remoteDescription && this.localConnection.remoteDescription.type && candidate.candidate){
       this.controller.log(candidate.candidate);
       this.localConnection.addIceCandidate(candidate.candidate)
       .catch(e => this.controller.trace(e));
-      //this.controller.log("EXIT handleAddCandidate");
+    } else {
+      this.controller.log(candidate);
     }
+    this.controller.log("EXIT handleAddCandidate");
   }
 
   handleStateChange(event){
-    //this.controller.log("ENTER handleStateChange");
-    //this.controller.log(`iceConnectionState: ${event.target.iceConnectionState}; iceGatheringState: ${event.target.iceGatheringState}; signalingState: ${event.target.signalingState}`);
-    //this.controller.log("EXIT handleStateChange");
+    this.controller.log("ENTER handleStateChange");
+    this.controller.log(`iceConnectionState: ${event.target.iceConnectionState}; iceGatheringState: ${event.target.iceGatheringState}; signalingState: ${event.target.signalingState}`);
+    this.controller.log("EXIT handleStateChange");
   }
 
   disconnectPeers() {
